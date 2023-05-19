@@ -3,7 +3,7 @@ from pygame.math import Vector2 as Vector
 from pygame.mouse import get_pos as mouse_position
 from pygame.image import load
 from settings import *
-
+from menu import Menu
 
 class Editor:
     def __init__(self):
@@ -21,11 +21,17 @@ class Editor:
         self.support_grid_surface.set_alpha(30)
 
         # Cursor
-        cursor_surf = load("assets/cursors/cursor.png").convert_alpha()
+        cursor_surf = load("resources/cursors/cursor.png").convert_alpha()
         new_cursor_size = (28.35, 42.3)
         cursor_surf = pygame.transform.scale(cursor_surf, new_cursor_size)
         cursor = pygame.cursors.Cursor((0, 0), cursor_surf)
         pygame.mouse.set_cursor(cursor)
+
+        # Selection index
+        self.selection_index = 0
+
+        # Menu
+        self.menu = Menu()
 
     # Event loop
     def event_loop(self):
@@ -35,6 +41,7 @@ class Editor:
                 pygame.quit()
                 sys.exit()
             self.process_input(event)
+            self.menu_click(event)
 
     # Input process (movement,...)
     def process_input(self, event):
@@ -54,6 +61,12 @@ class Editor:
                 self.origin.y -= event.y * 50
             else:
                 self.origin.x += event.y * 50
+
+    def menu_click(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and self.menu.rect.collidepoint(mouse_position()):
+            new_selection_index = self.menu.click(mouse_position(), pygame.mouse.get_pressed())
+            if new_selection_index:
+                self.selection_index = new_selection_index
 
     # Drawing
     def draw_tiles_grid(self):
@@ -83,5 +96,6 @@ class Editor:
 
         # Drawings
         self.draw_tiles_grid()
-        pygame.draw.circle(self.display_surface, '#3C3F41', self.origin, 10)
+        pygame.draw.circle(self.display_surface, 'red', self.origin, 10)
+        self.menu.display(self.selection_index)
 
