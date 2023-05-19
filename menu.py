@@ -7,11 +7,13 @@ from pygame.image import load
 class Menu:
     def __init__(self):
         self.display_surface = pygame.display.get_surface()
+
+        self.menu_surfaces = {}
         self.create_data()
+
         self.create_buttons()
 
     def create_data(self):
-        self.menu_surfaces = {}
         for key, value in EDITOR_DATA.items():
             if value["menu"]:
                 if not value["menu"] in self.menu_surfaces:
@@ -59,23 +61,21 @@ class Menu:
                 pygame.draw.rect(self.display_surface, BUTTON_LINE_COLOR, self.buttons[1][key].inflate(4, 4), 5, 4)
 
     def display(self, index):
-        # pygame.draw.rect(self.display_surface, 'grey', self.rect)
-        #for button in self.buttons[1].values():
-            #pygame.draw.rect(self.display_surface, 'yellow', button)
         self.buttons_group.update()
         self.buttons_group.draw(self.display_surface)
         self.highlight_indicator(index)
 
 
 class Button(pygame.sprite.Sprite):
-    def __init__(self, rect, group, items, items_click=None):
+    def __init__(self, rect, group, items):
         super().__init__(group)
+
         self.image = pygame.Surface(rect.size)
         self.rect = rect
+
         # Items
         self.items = items
         self.index = 0
-        self.main_active = True
 
     def get_id(self):
         return self.items[self.index][0]

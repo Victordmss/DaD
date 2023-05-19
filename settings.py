@@ -4,8 +4,10 @@ TILE_SIZE = 64
 LINE_COLOR = "Black"
 
 EDITOR_DATA = {
-    0: {'menu': None},
-    1: {'menu': None},
+    0: {'style': 'player', 'type': 'object', 'menu': None, 'menu_surf': None,
+        'preview': None, 'graphics': None},
+    1: {'style': 'sky', 'type': 'object', 'menu': None, 'menu_surf': None,
+        'preview': None, 'graphics': None},
 
     2: {'style': 'terrain', 'type': 'tile', 'menu': 'terrain', 'menu_surf': 'resources/assets/blocks/terrain/5.png',
         'preview': 'resources/assets/blocks/terrain/5.png', 'graphics': None},
@@ -56,3 +58,14 @@ EDITOR_DATA = {
 
 BUTTON_LINE_COLOR = '#f5f1de'
 BUTTON_BG_COLOR = '#33323d'
+
+NEIGHBOR_DIRECTIONS = {
+    '1': (0, -1),
+    '2': (1, -1),
+    '3': (1, 0),
+    '4': (1, 1),
+    '5': (0, 1),
+    '6': (-1, 1),
+    '7': (-1, 0),
+    '8': (-1, -1)
+}
