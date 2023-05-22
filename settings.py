@@ -9,8 +9,8 @@ EDITOR_DATA = {
     1: {'style': 'sky', 'type': 'object', 'menu': None, 'menu_surf': None,
         'preview': None, 'graphics': None},
 
-    2: {'style': 'terrain', 'type': 'tile', 'menu': 'terrain', 'menu_surf': 'resources/assets/blocks/terrain/5.png',
-        'preview': 'resources/assets/blocks/terrain/5.png', 'graphics': None},
+    2: {'style': 'terrain', 'type': 'tile', 'menu': 'terrain', 'menu_surf': 'resources/assets/blocks/terrain/X.png',
+        'preview': 'resources/assets/blocks/terrain/X.png', 'graphics': None},
 
     3: {'style': 'tree', 'type': 'object', 'menu': 'tree',
         'menu_surf': 'resources/assets/decorations/nature/tree1.png',
@@ -52,9 +52,10 @@ EDITOR_DATA = {
          'preview': 'resources/assets/decorations/box3.png', 'graphics': ''},
 
     14: {'style': 'spike', 'type': 'object', 'menu': 'spike',
-         'menu_surf': 'resources/assets/blocks/spikes.png',
-         'preview': 'resources/assets/blocks/spikes.png', 'graphics': ''},
+         'menu_surf': 'resources/assets/decorations/enemy/spikes.png',
+         'preview': 'resources/assets/decorations/enemy/spikes.png', 'graphics': ''},
 }
+
 
 BUTTON_LINE_COLOR = '#f5f1de'
 BUTTON_BG_COLOR = '#33323d'
