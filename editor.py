@@ -3,8 +3,9 @@ from pygame.math import Vector2 as Vector
 from pygame.mouse import get_pos as mouse_position
 from pygame.image import load
 from settings import *
+from support import *
 from menu import Menu
-
+import random
 
 # This method is used to know is "what" is in "where"
 def in_container(what: str, where: str) -> bool:
@@ -43,9 +44,46 @@ class Editor:
         self.last_selected_cell = None  # For now, there is no last selected cell
         self.tiles_placed = {}
         self.tiles_data = tiles_data
+        self.imports()
 
         # Menu
         self.menu = Menu()
+
+        # Object
+        self.objects_placed = pygame.sprite.Group()
+
+        # Player
+        Object(
+            (200, WINDOW_HEIGHT / 2),
+            self.animations[0]['frames'],
+            0,
+            self.origin,
+            self.objects_placed
+        )
+
+    def imports(self):
+
+        # animations
+        self.animations = {}
+        for key, value in EDITOR_DATA.items():
+            if value['graphics']:
+                graphics = import_folder(value['graphics'])
+                self.animations[key] = {
+                    'frame index': 0,
+                    'frames': graphics,
+                    'length': len(graphics)
+                }
+
+        for key, value in EDITOR_DATA.items():
+            if value['type'] == 'tile' and value["style"] != "terrain":
+                image_surface = pygame.image.load(value['menu_surf'])
+                self.tiles_data[value["menu_surf"].split(".")[-2].split('/')[-1]] = image_surface
+
+    def animation_update(self, dt):
+        for value in self.animations.values():
+            value['frame index'] += ANIMATION_SPEED * dt
+            if value['frame index'] >= value['length']:
+                value['frame index'] = 0
 
     # Drawing the additional grid that helps the user to know where he can place tiles
     def draw_tiles_grid(self):
@@ -77,11 +115,16 @@ class Editor:
     def run(self, dt):
         self.event_loop()
 
+        # Animations
+        self.animation_update(dt)
+        for canvas_object in self.objects_placed:
+            canvas_object.update(dt)
+
         # Drawings
-        self.display_surface.fill("#25282d")
+        self.display_surface.fill('#92a9ce')
         self.draw_tiles_grid()
         self.tiles_adding()
-        self.tiles_drawing()
+        self.draw_level()
         self.menu.display(self.item_selection_index)
 
     # Event loop
@@ -145,6 +188,8 @@ class Editor:
         # Shift update
         if self.mouse_clicked:
             self.origin = Vector(mouse_position()) - self.offset
+            for sprite_object in self.objects_placed:
+                sprite_object.shift_position(self.origin)
 
         # Scrolling option
         if event.type == pygame.MOUSEWHEEL and not pygame.key.get_pressed()[pygame.K_LCTRL]:
@@ -165,7 +210,7 @@ class Editor:
             if current_cel != self.last_selected_cell:
                 if current_cel in self.tiles_placed:
                     # Add the item_selection_index to the existing tile at the current cell
-                    self.tiles_placed[current_cel].add_id(self.item_selection_index)
+                    self.tiles_placed[current_cel].tile_id = self.item_selection_index
                 else:
                     # Create a new tile at the current cell with the item_selection_index
                     self.tiles_placed[current_cel] = Tile(self.item_selection_index)
@@ -174,14 +219,65 @@ class Editor:
                 self.check_neighbors(current_cel)  # Updating the shape of the terrain tiles
 
     # Draw the tiles on the editor window
-    def tiles_drawing(self):
+    def draw_level(self):
         for pos, tile in self.tiles_placed.items():
             pos = self.origin + Vector(pos) * self.tile_size
-            if tile.has_terrain:
-                name = ''.join(tile.terrain_neighbors)
-                terrain_style = name if name in self.tiles_data else 'X'  # X is the default terrain file
-                surf = pygame.transform.scale(self.tiles_data[terrain_style], (self.tile_size, self.tile_size))
-                self.display_surface.blit(surf, pos)
+            # Terrain
+            match tile.tile_id:
+                case 2:
+                    name = ''.join(tile.terrain_neighbors)
+                    terrain_style = name if name in self.tiles_data else 'X'  # X is the default terrain file
+                    surf = pygame.transform.scale(self.tiles_data[terrain_style], (self.tile_size, self.tile_size))
+                    self.display_surface.blit(surf, pos)
+
+                case 6:
+                    terrain_style = self.tiles_data[f'pot1']
+                    surf = pygame.transform.scale(terrain_style,
+                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+
+                    if not tile.random_pos:
+                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+
+                    self.display_surface.blit(surf, (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+
+                case 7:
+                    terrain_style = self.tiles_data['pot2']
+                    surf = pygame.transform.scale(terrain_style,
+                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+
+                    if not tile.random_pos:
+                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+
+                    self.display_surface.blit(surf,
+                                              (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+
+                case 8:
+                    terrain_style = self.tiles_data['pot3']
+                    surf = pygame.transform.scale(terrain_style,
+                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+
+                    if not tile.random_pos:
+                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+
+                    self.display_surface.blit(surf,
+                                              (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+
+                case 11:
+                    terrain_style = self.tiles_data['box1']
+                    surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
+                    self.display_surface.blit(surf, pos)
+
+                case 12:
+                    terrain_style = self.tiles_data['box2']
+                    surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
+                    self.display_surface.blit(surf, pos)
+
+                case 13:
+                    terrain_style = self.tiles_data['box3']
+                    surf = pygame.transform.scale(terrain_style, (self.tile_size * 0.90, self.tile_size * 1.05))
+                    self.display_surface.blit(surf, pos)
+
+        self.objects_placed.draw(self.display_surface)
 
     # This method is used to delete tiles on the editor window
     def tiles_removing(self):
@@ -193,7 +289,7 @@ class Editor:
                 # Check if the current cell exists in the tiles_placed dictionary
                 if current_cel in self.tiles_placed:
                     # Remove the item_selection_index from the tile at the current cell
-                    self.tiles_placed[current_cel].remove_id(self.item_selection_index)
+                    self.tiles_placed[current_cel].remove_id()
 
                     # Check if the tile at the current cell becomes empty
                     if self.tiles_placed[current_cel].is_empty:
@@ -227,7 +323,7 @@ class Editor:
                 for name, direction in NEIGHBOR_DIRECTIONS.items():
                     neighbor_cell = (cell[0] + direction[0], cell[1] + direction[1])
                     if neighbor_cell in self.tiles_placed:
-                        if self.tiles_placed[neighbor_cell].has_terrain:
+                        if self.tiles_placed[neighbor_cell].tile_id == 2:
                             # Append the direction name to the terrain_neighbors string if the neighboring cell has terrain
                             self.tiles_placed[cell].terrain_neighbors += name
 
@@ -248,35 +344,58 @@ class Editor:
 class Tile:
     def __init__(self, tile_id):
         # Tile information
-        self.has_terrain = False  # Flag indicating if the tile has terrain
-        self.is_empty = False  # Flag indicating if the tile is empty
-        self.enemy = None  # Flag indicating if the tile is an enemy
+        self.tile_id = tile_id
+        self.is_empty = False
 
         self.terrain_neighbors = []  # List of terrain neighbors
         self.objects = []  # List of objects on the tile
 
-        self.add_id(tile_id)  # Add the initial tile ID
+        self.random_pos = None
 
-    def add_id(self, tile_id):
-        data = {key: value['style'] for key, value in EDITOR_DATA.items()}
-        # Match the tile_id with the corresponding style in the data dictionary
-        match data[tile_id]:
-            case 'terrain':
-                self.has_terrain = True
-            case 'enemy':
-                self.enemy = tile_id
+    def remove_id(self):
+        self.tile_id = None
+        self.is_empty = True
 
-    def check_content(self):
-        # Check the content of the tile and update the is_empty flag
-        if not self.has_terrain and not self.enemy:
-            self.is_empty = True
 
-    def remove_id(self, tile_id):
-        data = {key: value['style'] for key, value in EDITOR_DATA.items()}
-        # Match the tile_id with the corresponding style in the data dictionary
-        match data[tile_id]:
-            case 'terrain':
-                self.has_terrain = False
-            case 'enemy':
-                self.enemy = None
-        self.check_content()
+class Object(pygame.sprite.Sprite):
+    def __init__(self, pos, frame, tile_id, origin, group):
+        super().__init__(group)
+
+        # Animation
+        self.frames = frame
+        self.frame_index = 0
+
+        self.image = self.set_image()
+        self.rect = self.image.get_rect(center=pos)
+
+        # movement
+        self.distance_to_origin = Vector(self.rect.topleft - origin)
+
+    def set_image(self):
+        image = self.frames[int(self.frame_index)]
+
+        image_ratio = image.get_width() / image.get_height()
+
+        if image_ratio > 1:
+            new_image_size = (TILE_SIZE, TILE_SIZE / image_ratio)
+        else:
+            new_image_size = (TILE_SIZE * image_ratio, TILE_SIZE)
+
+        return pygame.transform.scale(image, new_image_size)
+
+    def animate(self, dt):
+        self.frame_index += ANIMATION_SPEED * dt
+        if self.frame_index >= len(self.frames):
+            self.frame_index = 0
+        self.image = self.set_image()
+        self.rect = self.image.get_rect(midbottom = self.rect.midbottom)
+
+    def shift_position(self, origin):
+        self.rect.topleft = origin + self.distance_to_origin
+
+    def update(self, dt):
+        self.animate(dt)
+
+
+
+

@@ -104,7 +104,7 @@ class Button(pygame.sprite.Sprite):
         rect = surf.get_rect(center=(self.rect.width / 2, self.rect.height / 2))
         self.image.blit(surf, rect)
 
-    def switch_item(self):
+    def switch(self):
         # Switch to the next item in the button's item list
         self.index += 1
         self.index = 0 if self.index >= len(self.items) else self.index
