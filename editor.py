@@ -54,12 +54,13 @@ class Editor:
 
         # Player
         Object(
-            (200, WINDOW_HEIGHT / 2),
-            self.animations[0]['frames'],
-            0,
-            self.origin,
-            self.objects_placed
+            pos=(200, WINDOW_HEIGHT / 2),
+            frame=self.animations[0]['frames'],
+            tile_id=0,
+            origin=self.origin,
+            group=self.objects_placed
         )
+        self.object_selected = False
 
     def imports(self):
 
@@ -115,17 +116,17 @@ class Editor:
     def run(self, dt):
         self.event_loop()
 
+        # Drawings
+        self.display_surface.fill('#92a9ce')
+        self.draw_tiles_grid()
+        self.canvas_adding()
+        self.draw_level()
+        self.menu.display(self.item_selection_index)
+
         # Animations
         self.animation_update(dt)
         for canvas_object in self.objects_placed:
             canvas_object.update(dt)
-
-        # Drawings
-        self.display_surface.fill('#92a9ce')
-        self.draw_tiles_grid()
-        self.tiles_adding()
-        self.draw_level()
-        self.menu.display(self.item_selection_index)
 
     # Event loop
     def event_loop(self):
@@ -136,7 +137,8 @@ class Editor:
                 sys.exit()
             self.shift_process(event)  # Process possible shift
             self.menu_click(event)  # Process possible click on the menu
-            self.tiles_adding()  # Process adding of tiles
+            self.object_dragging(event)
+            self.canvas_adding()  # Process adding of tiles
             self.tiles_removing()  # Process removing of tiles
             self.zoom_process(event)  # Process the zoom of the window
 
@@ -198,28 +200,57 @@ class Editor:
             else:
                 self.origin.x += event.y * 50
 
+    def object_dragging(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
+            for sprite in self.objects_placed:
+                if sprite.rect.collidepoint(event.pos):
+                    self.object_selected = True
+                    sprite.start_drag()
+
+        if event.type == pygame.MOUSEBUTTONUP and self.object_selected:
+            for sprite in self.objects_placed:
+                if sprite.selected:
+                    sprite.end_drag(self.origin)
+                    self.object_selected = False
+
     # This method is used to add new tiles on the editor window
-    def tiles_adding(self):
+    def canvas_adding(self):
         # Check if the left mouse button is pressed, not over the menu, and not holding the left Control key (movement)
         if pygame.mouse.get_pressed()[0] \
                 and not self.menu.rect.collidepoint(mouse_position()) \
-                and not pygame.key.get_pressed()[pygame.K_LCTRL]:
+                and not pygame.key.get_pressed()[pygame.K_LCTRL]\
+                and not self.object_selected:
+
             current_cel = self.get_current_cell()
 
-            # Check if the current cell is different from the last selected cell (optimisation verification)
-            if current_cel != self.last_selected_cell:
-                if current_cel in self.tiles_placed:
-                    # Add the item_selection_index to the existing tile at the current cell
-                    self.tiles_placed[current_cel].tile_id = self.item_selection_index
-                else:
-                    # Create a new tile at the current cell with the item_selection_index
-                    self.tiles_placed[current_cel] = Tile(self.item_selection_index)
+            if EDITOR_DATA[self.item_selection_index]['type'] == "tile": # Let's place a new tile
+                # Check if the current cell is different from the last selected cell (optimisation verification)
+                if current_cel != self.last_selected_cell:
+                    if current_cel in self.tiles_placed:
+                        # Add the item_selection_index to the existing tile at the current cell
+                        self.tiles_placed[current_cel].tile_id = self.item_selection_index
+                    else:
+                        # Create a new tile at the current cell with the item_selection_index
+                        self.tiles_placed[current_cel] = Tile(self.item_selection_index)
 
-                self.last_selected_cell = current_cel
-                self.check_neighbors(current_cel)  # Updating the shape of the terrain tiles
+                    self.last_selected_cell = current_cel
+                    self.check_neighbors(current_cel)  # Updating the shape of the terrain tiles
+
+            else:   # Place a new object
+                Object(
+                    pos=mouse_position(),
+                    frame=self.animations[self.item_selection_index]["frames"],
+                    tile_id=self.item_selection_index,
+                    origin=self.origin,
+                    group=self.objects_placed
+                )
 
     # Draw the tiles on the editor window
     def draw_level(self):
+        # Objects
+        self.objects_placed.draw(self.display_surface)
+
+        # Tiles
         for pos, tile in self.tiles_placed.items():
             pos = self.origin + Vector(pos) * self.tile_size
             # Terrain
@@ -277,7 +308,10 @@ class Editor:
                     surf = pygame.transform.scale(terrain_style, (self.tile_size * 0.90, self.tile_size * 1.05))
                     self.display_surface.blit(surf, pos)
 
-        self.objects_placed.draw(self.display_surface)
+                case 14:
+                    terrain_style = self.tiles_data['spikes']
+                    surf = pygame.transform.scale(terrain_style, (self.tile_size, int(self.tile_size / terrain_style.get_width() * terrain_style.get_height())))
+                    self.display_surface.blit(surf, (pos[0], pos[1] + self.tile_size - surf.get_height()))
 
     # This method is used to delete tiles on the editor window
     def tiles_removing(self):
@@ -360,6 +394,7 @@ class Tile:
 class Object(pygame.sprite.Sprite):
     def __init__(self, pos, frame, tile_id, origin, group):
         super().__init__(group)
+        self.tile_id = tile_id
 
         # Animation
         self.frames = frame
@@ -370,31 +405,63 @@ class Object(pygame.sprite.Sprite):
 
         # movement
         self.distance_to_origin = Vector(self.rect.topleft - origin)
+        self.selected = False
+        self.mouse_offset = Vector(0, 0)
+
+    def start_drag(self):
+        self.selected = True
+        self.mouse_offset = Vector(mouse_position()) - Vector(self.rect.topleft)
+
+    def drag(self):
+        if self.selected:
+            self.rect.topleft = mouse_position() - self.mouse_offset
+
+    def end_drag(self, origin):
+        self.selected = False
+        self.distance_to_origin = Vector(self.rect.topleft) - origin
 
     def set_image(self):
         image = self.frames[int(self.frame_index)]
 
         image_ratio = image.get_width() / image.get_height()
 
-        if image_ratio > 1:
-            new_image_size = (TILE_SIZE, TILE_SIZE / image_ratio)
-        else:
-            new_image_size = (TILE_SIZE * image_ratio, TILE_SIZE)
+        if self.tile_id == 0:
+            if image_ratio > 1:
+                new_image_size = (TILE_SIZE, TILE_SIZE / image_ratio)
+            else:
+                new_image_size = (TILE_SIZE * image_ratio, TILE_SIZE)
+            image = pygame.transform.scale(image, new_image_size)
 
-        return pygame.transform.scale(image, new_image_size)
+        elif self.tile_id in [9, 10]:
+            if image_ratio > 1:
+                new_image_size = (2 * TILE_SIZE, 2 * TILE_SIZE / image_ratio)
+            else:
+                new_image_size = (2 * TILE_SIZE * image_ratio, 2 * TILE_SIZE)
+            image = pygame.transform.scale(image, new_image_size)
+
+        elif self.tile_id in [3, 4]:
+            if image_ratio > 1:
+                new_image_size = (4 * TILE_SIZE, 4 * TILE_SIZE / image_ratio)
+            else:
+                new_image_size = (4 * TILE_SIZE * image_ratio, 4 * TILE_SIZE)
+            image = pygame.transform.scale(image, new_image_size)
+
+
+        return image
 
     def animate(self, dt):
         self.frame_index += ANIMATION_SPEED * dt
         if self.frame_index >= len(self.frames):
             self.frame_index = 0
         self.image = self.set_image()
-        self.rect = self.image.get_rect(midbottom = self.rect.midbottom)
+        self.rect = self.image.get_rect(midbottom=self.rect.midbottom)
 
     def shift_position(self, origin):
         self.rect.topleft = origin + self.distance_to_origin
 
     def update(self, dt):
         self.animate(dt)
+        self.drag()
 
 
 
