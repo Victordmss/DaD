@@ -4,8 +4,10 @@ from pygame.mouse import get_pos as mouse_position
 from pygame.image import load
 from settings import *
 from support import *
+from timer import Timer
 from menu import Menu
 import random
+
 
 # This method is used to know is "what" is in "where"
 def in_container(what: str, where: str) -> bool:
@@ -51,6 +53,8 @@ class Editor:
 
         # Object
         self.objects_placed = pygame.sprite.Group()
+        self.timer = Timer(400)
+        self.object_selected = False
 
         # Player
         Object(
@@ -60,7 +64,13 @@ class Editor:
             origin=self.origin,
             group=self.objects_placed
         )
-        self.object_selected = False
+
+        # Clouds
+        self.current_clouds = []
+        self.cloud_surf = import_folder('resources/assets/decorations/clouds')
+        self.cloud_timer = pygame.USEREVENT + 1
+        pygame.time.set_timer(self.cloud_timer, 2000)
+        self.startup_clouds()
 
     def imports(self):
 
@@ -119,14 +129,18 @@ class Editor:
         # Drawings
         self.display_surface.fill('#92a9ce')
         self.draw_tiles_grid()
+
+        self.display_clouds(dt)
         self.canvas_adding()
         self.draw_level()
         self.menu.display(self.item_selection_index)
 
         # Animations
         self.animation_update(dt)
-        for canvas_object in self.objects_placed:
-            canvas_object.update(dt)
+        self.objects_placed.update(dt)
+        self.preview()
+        self.timer.update()
+
 
     # Event loop
     def event_loop(self):
@@ -139,8 +153,38 @@ class Editor:
             self.menu_click(event)  # Process possible click on the menu
             self.object_dragging(event)
             self.canvas_adding()  # Process adding of tiles
-            self.tiles_removing()  # Process removing of tiles
+            self.canvas_removing()  # Process removing of tiles
             self.zoom_process(event)  # Process the zoom of the window
+
+            self.create_clouds(event)
+
+    def display_clouds(self, dt):
+        for cloud in self.current_clouds:  # [{surf, pos, speed}]
+            cloud['pos'][0] -= cloud['speed'] * dt
+            x = cloud['pos'][0]
+            y = WINDOW_HEIGHT / 3 - cloud['pos'][1]
+            self.display_surface.blit(cloud['surf'], (x, y))
+
+    def create_clouds(self, event):
+        if event.type == self.cloud_timer:
+            surf = random.choice(self.cloud_surf)
+            surf = pygame.transform.scale2x(surf) if random.randint(0, 4) < 2 else surf
+
+            pos = [WINDOW_WIDTH + random.randint(50, 100), random.randint(0, WINDOW_HEIGHT)]
+            self.current_clouds.append({'surf': surf, 'pos': pos, 'speed': random.randint(20, 50)})
+
+            # remove clouds
+            self.current_clouds = [cloud for cloud in self.current_clouds if cloud['pos'][0] > -400]
+
+    def startup_clouds(self):
+        for i in range(5):
+            # Surf
+            surf = random.choice(self.cloud_surf)
+            # Pos
+            pos = [random.randint(0, WINDOW_WIDTH), random.randint(0, WINDOW_HEIGHT)]
+
+            # Init the cloud
+            self.current_clouds.append({'surf': surf, 'pos': pos, 'speed': random.randint(20, 50)})
 
     def zoom_process(self, event):
         if event.type == pygame.MOUSEWHEEL and pygame.key.get_pressed()[pygame.K_LCTRL]:
@@ -218,12 +262,12 @@ class Editor:
         # Check if the left mouse button is pressed, not over the menu, and not holding the left Control key (movement)
         if pygame.mouse.get_pressed()[0] \
                 and not self.menu.rect.collidepoint(mouse_position()) \
-                and not pygame.key.get_pressed()[pygame.K_LCTRL]\
+                and not pygame.key.get_pressed()[pygame.K_LCTRL] \
                 and not self.object_selected:
 
             current_cel = self.get_current_cell()
 
-            if EDITOR_DATA[self.item_selection_index]['type'] == "tile": # Let's place a new tile
+            if EDITOR_DATA[self.item_selection_index]['type'] == "tile":  # Let's place a new tile
                 # Check if the current cell is different from the last selected cell (optimisation verification)
                 if current_cel != self.last_selected_cell:
                     if current_cel in self.tiles_placed:
@@ -236,16 +280,18 @@ class Editor:
                     self.last_selected_cell = current_cel
                     self.check_neighbors(current_cel)  # Updating the shape of the terrain tiles
 
-            else:   # Place a new object
-                Object(
-                    pos=mouse_position(),
-                    frame=self.animations[self.item_selection_index]["frames"],
-                    tile_id=self.item_selection_index,
-                    origin=self.origin,
-                    group=self.objects_placed
-                )
+            else:  # Place a new object
+                if not self.timer.active:
+                    Object(
+                        pos=mouse_position(),
+                        frame=self.animations[self.item_selection_index]["frames"],
+                        tile_id=self.item_selection_index,
+                        origin=self.origin,
+                        group=self.objects_placed
+                    )
+                    self.timer.activate()
 
-    # Draw the tiles on the editor window
+    # Draw the tiles and the objects on the editor window
     def draw_level(self):
         # Objects
         self.objects_placed.draw(self.display_surface)
@@ -254,69 +300,75 @@ class Editor:
         for pos, tile in self.tiles_placed.items():
             pos = self.origin + Vector(pos) * self.tile_size
             # Terrain
-            match tile.tile_id:
-                case 2:
-                    name = ''.join(tile.terrain_neighbors)
-                    terrain_style = name if name in self.tiles_data else 'X'  # X is the default terrain file
-                    surf = pygame.transform.scale(self.tiles_data[terrain_style], (self.tile_size, self.tile_size))
-                    self.display_surface.blit(surf, pos)
+            self.create_tile_surface(pos, tile)
 
-                case 6:
-                    terrain_style = self.tiles_data[f'pot1']
-                    surf = pygame.transform.scale(terrain_style,
-                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+    def create_tile_surface(self, pos, tile):
+        match tile.tile_id:
+            case 2:
+                name = ''.join(tile.terrain_neighbors)
+                terrain_style = name if name in self.tiles_data else 'X'  # X is the default terrain file
+                surf = pygame.transform.scale(self.tiles_data[terrain_style], (self.tile_size, self.tile_size))
+                self.display_surface.blit(surf, pos)
 
-                    if not tile.random_pos:
-                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+            case 6:
+                terrain_style = self.tiles_data[f'pot1']
+                surf = pygame.transform.scale(terrain_style,
+                                              (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
 
-                    self.display_surface.blit(surf, (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+                if not tile.random_pos:
+                    tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
 
-                case 7:
-                    terrain_style = self.tiles_data['pot2']
-                    surf = pygame.transform.scale(terrain_style,
-                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+                self.display_surface.blit(surf,
+                                          (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
 
-                    if not tile.random_pos:
-                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+            case 7:
+                terrain_style = self.tiles_data['pot2']
+                surf = pygame.transform.scale(terrain_style,
+                                              (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
 
-                    self.display_surface.blit(surf,
-                                              (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+                if not tile.random_pos:
+                    tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
 
-                case 8:
-                    terrain_style = self.tiles_data['pot3']
-                    surf = pygame.transform.scale(terrain_style,
-                                                  (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
+                self.display_surface.blit(surf,
+                                          (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
 
-                    if not tile.random_pos:
-                        tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
+            case 8:
+                terrain_style = self.tiles_data['pot3']
+                surf = pygame.transform.scale(terrain_style,
+                                              (terrain_style.get_width() * 2, terrain_style.get_height() * 2))
 
-                    self.display_surface.blit(surf,
-                                              (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
+                if not tile.random_pos:
+                    tile.random_pos = random.randint(0, int(self.tile_size - surf.get_width()))
 
-                case 11:
-                    terrain_style = self.tiles_data['box1']
-                    surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
-                    self.display_surface.blit(surf, pos)
+                self.display_surface.blit(surf,
+                                          (pos[0] + tile.random_pos, pos[1] + (self.tile_size - surf.get_height())))
 
-                case 12:
-                    terrain_style = self.tiles_data['box2']
-                    surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
-                    self.display_surface.blit(surf, pos)
+            case 11:
+                terrain_style = self.tiles_data['box1']
+                surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
+                self.display_surface.blit(surf, pos)
 
-                case 13:
-                    terrain_style = self.tiles_data['box3']
-                    surf = pygame.transform.scale(terrain_style, (self.tile_size * 0.90, self.tile_size * 1.05))
-                    self.display_surface.blit(surf, pos)
+            case 12:
+                terrain_style = self.tiles_data['box2']
+                surf = pygame.transform.scale(terrain_style, (self.tile_size, self.tile_size))
+                self.display_surface.blit(surf, pos)
 
-                case 14:
-                    terrain_style = self.tiles_data['spikes']
-                    surf = pygame.transform.scale(terrain_style, (self.tile_size, int(self.tile_size / terrain_style.get_width() * terrain_style.get_height())))
-                    self.display_surface.blit(surf, (pos[0], pos[1] + self.tile_size - surf.get_height()))
+            case 13:
+                terrain_style = self.tiles_data['box3']
+                surf = pygame.transform.scale(terrain_style, (self.tile_size * 0.90, self.tile_size * 1.05))
+                self.display_surface.blit(surf, pos)
+
+            case 14:
+                terrain_style = self.tiles_data['spikes']
+                surf = pygame.transform.scale(terrain_style, (
+                    self.tile_size, int(self.tile_size / terrain_style.get_width() * terrain_style.get_height())))
+                self.display_surface.blit(surf, (pos[0], pos[1] + self.tile_size - surf.get_height()))
 
     # This method is used to delete tiles on the editor window
-    def tiles_removing(self):
-        # Check if the right mouse button is pressed and not over the menu
+    def canvas_removing(self):
         if pygame.mouse.get_pressed()[2] and not self.menu.rect.collidepoint(mouse_position()):
+
+            # Removing tiles
             if self.tiles_placed:
                 current_cel = self.get_current_cell()
 
@@ -331,6 +383,40 @@ class Editor:
                         del self.tiles_placed[current_cel]
 
                     self.check_neighbors(current_cel)
+
+            # Removing object
+            if selected_object := self.find_selected_object():
+                if EDITOR_DATA[selected_object.tile_id]["style"] != "player":
+                    selected_object.kill()
+
+    def preview(self):
+        selected_object = self.find_selected_object()
+        if not self.menu.rect.collidepoint(mouse_position()):
+            if selected_object:
+                rect = selected_object.rect.inflate(10, 10)
+                color = 'black'
+                width = 3
+                size = 15
+
+                # topleft
+                pygame.draw.lines(self.display_surface, color, False,
+                                  ((rect.left, rect.top + size), rect.topleft, (rect.left + size, rect.top)), width)
+                # topright
+                pygame.draw.lines(self.display_surface, color, False,
+                                  ((rect.right - size, rect.top), rect.topright, (rect.right, rect.top + size)), width)
+                # bottomright
+                pygame.draw.lines(self.display_surface, color, False, (
+                (rect.right - size, rect.bottom), rect.bottomright, (rect.right, rect.bottom - size)), width)
+                # bottomleft
+                pygame.draw.lines(self.display_surface, color, False,
+                                  ((rect.left, rect.bottom - size), rect.bottomleft, (rect.left + size, rect.bottom)),
+                                  width)
+
+    def find_selected_object(self):
+        for sprite in self.objects_placed:
+            if sprite.rect.collidepoint(mouse_position()):
+                return sprite
+        return None
 
     # Method used to update the shape of the displayed tile
     def check_neighbors(self, cell):
@@ -446,7 +532,6 @@ class Object(pygame.sprite.Sprite):
                 new_image_size = (4 * TILE_SIZE * image_ratio, 4 * TILE_SIZE)
             image = pygame.transform.scale(image, new_image_size)
 
-
         return image
 
     def animate(self, dt):
@@ -462,7 +547,3 @@ class Object(pygame.sprite.Sprite):
     def update(self, dt):
         self.animate(dt)
         self.drag()
-
-
-
-
